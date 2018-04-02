@@ -47,6 +47,7 @@ if __name__=='__main__':
     #print(dirname)
     datas = getDataFiles('/home/li/PycharmProjects/classfication/data/datas.text')
     #narr = np.zeros_like(filenames)
+    
     # for file in filenames:
     #     file = file.split(',')
         #data = narr.append(file)
