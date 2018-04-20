@@ -13,7 +13,11 @@ from utils.eulerangles import euler2mat
 
 label_map = {'01':1,'02':2,'03':3}
 
-txtfile = '/home/li/PycharmProjects/classfication/data/datas.text'
+traintxt = '/home/li/PycharmProjects/classfication/data/train.txt'
+testtxt = '/home/li/PycharmProjects/classfication/data/test.txt'
+
+trainfile = '/home/li/Desktop/3dmodel/train'
+testfile = '/home/li/Desktop/3dmodel/test'
 
 def getDataFiles(list_filename):
     '''read txt return a array(filename,label)'''
@@ -45,15 +49,7 @@ if __name__=='__main__':
     #     label = label_map[int(file)]
     #
     #print(dirname)
-    datas = getDataFiles('/home/li/PycharmProjects/classfication/data/datas.text')
-    #narr = np.zeros_like(filenames)
-    
-    # for file in filenames:
-    #     file = file.split(',')
-        #data = narr.append(file)
-
-
-
-    #data = filenames[:,:]
-    #label = filenames[:,1]
-    print(data for data in datas)
+    #traversal(trainfile,traintxt)
+    #traversal(testfile,testtxt)
+    datas = getDataFiles(traintxt)
+    print(datas)
