@@ -4,7 +4,7 @@
 # @Author  : Yewei Li
 # @E-mail  : liyewei20@163.com
 import tensorflow as tf
-
+import numpy as np
 #--------------------------------------------------#
 #edge features
 #ref:Dynamic Graph CNN for Learning on Point Clouds,arXiv preprint arXiv:1801.07829
@@ -20,10 +20,10 @@ def pairwise_distance(point_cloud):
     og_batch_size = point_cloud.get_shape().as_list()[0]
     point_cloud = tf.squeeze(point_cloud)
     if og_batch_size == 1:
-        point_cloud = tf.expand_dims(point_cloud, 0)
+        point_cloud = tf.expand_dims(point_cloud, 0)#增加维度
 
-    point_cloud_transpose = tf.transpose(point_cloud, perm=[0, 2, 1])
-    point_cloud_inner = tf.matmul(point_cloud, point_cloud_transpose)
+    point_cloud_transpose = tf.transpose(point_cloud, perm=[0, 2, 1])#交换输入张量的不同维度用的
+    point_cloud_inner = tf.matmul(point_cloud, point_cloud_transpose)#n*n
     point_cloud_inner = -2 * point_cloud_inner
     point_cloud_square = tf.reduce_sum(tf.square(point_cloud), axis=-1, keep_dims=True)
     point_cloud_square_tranpose = tf.transpose(point_cloud_square, perm=[0, 2, 1])
@@ -39,7 +39,7 @@ def knn(adj_matrix, k=20):
     nearest neighbors: (batch_size, num_points, k)
   """
   neg_adj = -adj_matrix
-  _, nn_idx = tf.nn.top_k(neg_adj, k=k)
+  _, nn_idx = tf.nn.top_k(neg_adj, k=k)#这个函数的作用是返回 input 中每行最大的 k 个数，并且返回它们所在位置的索引
   return nn_idx
 
 def get_edge_feature(point_cloud, nn_idx, k=20):
@@ -53,7 +53,7 @@ def get_edge_feature(point_cloud, nn_idx, k=20):
     edge features: (batch_size, num_points, k, num_dims)
   """
   og_batch_size = point_cloud.get_shape().as_list()[0]
-  point_cloud = tf.squeeze(point_cloud)
+  point_cloud = tf.squeeze(point_cloud)#从tensor中删除所有大小是1的维度
   if og_batch_size == 1:
     point_cloud = tf.expand_dims(point_cloud, 0)
 
@@ -82,3 +82,10 @@ def edge_feature(point_cloud, k):
     nn_idx = knn(adj_matrix, k=k)
     return get_edge_feature(point_cloud, nn_idx=nn_idx, k=k)
 #---------------------------------------------------#
+
+
+if __name__ == "__main__":
+    #a = np.random.randint(0, 100, (10,10,3))
+    x = tf.truncated_normal([10, 100, 3], dtype=tf.float32)
+    b = edge_feature(x, 20)
+    print(b)
