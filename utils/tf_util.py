@@ -49,8 +49,7 @@ def _variable_with_weight_decay(name, shape, stddev, wd, use_xavier=True):
   return var
 
 def get_learning_rate_decay(base_lr, batch, batch_size, decay_step, decay_rate, decay_clip):
-    '''指数衰减学习率.
-    tf.train.exponential_decay(learning_rate, global_, decay_steps, decay_rate, staircase=True/False)
+    '''指数衰减学习率.tf.train.exponential_decay(learning_rate, global_, decay_steps, decay_rate, staircase=True/False)
     '''
     learning_rate = tf.train.exponential_decay(
                         base_lr,             # Base learning rate.
@@ -61,19 +60,7 @@ def get_learning_rate_decay(base_lr, batch, batch_size, decay_step, decay_rate, 
     learning_rate = tf.maximum(learning_rate, decay_clip) # CLIP THE LEARNING RATE! decay_clip = 0.00001
     return learning_rate
 
-def get_bn_decay(base_decay, batch, batch_size, decay_step, decay_rate, decay_clip):
-    '''bn衰减.
-    '''
-    bn_momentum = tf.train.exponential_decay(
-                        base_decay,
-                        batch*batch_size,
-                        decay_step,
-                        decay_rate,
-                        staircase=True)
-    bn_decay = tf.minimum(decay_clip, 1 - bn_momentum)
-    return bn_decay
-
-
+#-------------------------------------------------------convs-----------------------------------------------------------#
 def conv1d(inputs,
            num_output_channels,
            kernel_size,
@@ -273,7 +260,6 @@ def conv2d_transpose(inputs,
         outputs = activation_fn(outputs)
       return outputs
 
-   
 
 def conv3d(inputs,
            num_output_channels,
@@ -373,8 +359,10 @@ def fully_connected(inputs,
     if activation_fn is not None:
       outputs = activation_fn(outputs)
     return outputs
+#----------------------------------------------------------------------------------------------------------------------#
 
 
+#----------------------------------------------avg and max pooling for 3d,2d-------------------------------------------#
 def max_pool2d(inputs,
                kernel_size,
                scope,
@@ -400,13 +388,13 @@ def max_pool2d(inputs,
                              name=sc.name)
     return outputs
 
+
 def avg_pool2d(inputs,
                kernel_size,
                scope,
                stride=[2, 2],
                padding='VALID'):
   """ 2D avg pooling.
-
   Args:
     inputs: 4-D tensor BxHxWxC
     kernel_size: a list of 2 ints
@@ -475,9 +463,20 @@ def avg_pool3d(inputs,
                                padding=padding,
                                name=sc.name)
     return outputs
+#----------------------------------------------------------------------------------------------------------------------#
 
 
-
+#---------------------------------------------------Batch normalization------------------------------------------------#
+def get_bn_decay(base_decay, batch, batch_size, decay_step, decay_rate, decay_clip):
+    '''bn衰减.https://www.zhihu.com/question/38102762'''
+    bn_momentum = tf.train.exponential_decay(
+                        base_decay,
+                        batch*batch_size,
+                        decay_step,
+                        decay_rate,
+                        staircase=True)
+    bn_decay = tf.minimum(decay_clip, 1 - bn_momentum)
+    return bn_decay
 
 
 def batch_norm_template(inputs, is_training, scope, moments_dims, bn_decay):
@@ -499,8 +498,13 @@ def batch_norm_template(inputs, is_training, scope, moments_dims, bn_decay):
                        name='beta', trainable=True)
     gamma = tf.Variable(tf.constant(1.0, shape=[num_channels]),
                         name='gamma', trainable=True)
+
+    #The mean and variance are calculated by aggregating the contents of x across axes
     batch_mean, batch_var = tf.nn.moments(inputs, moments_dims, name='moments')
+
     decay = bn_decay if bn_decay is not None else 0.9
+
+    #滑动平均模型，使用指数衰减来计算变量的移动平均值。https://www.cnblogs.com/cloud-ken/p/7521609.html
     ema = tf.train.ExponentialMovingAverage(decay=decay)
     # Operator that maintains moving averages of variables.
     ema_apply_op = tf.cond(is_training,
@@ -556,7 +560,6 @@ def batch_norm_dist_template(inputs, is_training, scope, moments_dims, bn_decay)
     return normed
 
 
-
 def batch_norm_for_fc(inputs, is_training, bn_decay, scope, is_dist=False):
   """ Batch normalization on FC data.
   
@@ -591,8 +594,6 @@ def batch_norm_for_conv1d(inputs, is_training, bn_decay, scope, is_dist=False):
     return batch_norm_dist_template(inputs, is_training, scope, [0,1], bn_decay)
   else:
     return batch_norm_template(inputs, is_training, scope, [0,1], bn_decay)
-
-
 
   
 def batch_norm_for_conv2d(inputs, is_training, bn_decay, scope, is_dist=False):
@@ -630,8 +631,10 @@ def batch_norm_for_conv3d(inputs, is_training, bn_decay, scope, is_dist=False):
     return batch_norm_dist_template(inputs, is_training, scope, [0,1,2,3], bn_decay)
   else:
     return batch_norm_template(inputs, is_training, scope, [0,1,2,3], bn_decay)
+#------------------------------------------------------------------------------------------------------------------#
 
 
+#------------------------------------------Dropout-----------------------------------------------------------------#
 def dropout(inputs,
             is_training,
             scope,
@@ -654,74 +657,4 @@ def dropout(inputs,
                       lambda: tf.nn.dropout(inputs, keep_prob, noise_shape),
                       lambda: inputs)
     return outputs
-
-
-def pairwise_distance(point_cloud):
-  """Compute pairwise distance of a point cloud.
-
-  Args:
-    point_cloud: tensor (batch_size, num_points, num_dims)
-
-  Returns:
-    pairwise distance: (batch_size, num_points, num_points)
-  """
-  og_batch_size = point_cloud.get_shape().as_list()[0]
-  point_cloud = tf.squeeze(point_cloud)
-  if og_batch_size == 1:
-    point_cloud = tf.expand_dims(point_cloud, 0)
-    
-  point_cloud_transpose = tf.transpose(point_cloud, perm=[0, 2, 1])
-  point_cloud_inner = tf.matmul(point_cloud, point_cloud_transpose)
-  point_cloud_inner = -2*point_cloud_inner
-  point_cloud_square = tf.reduce_sum(tf.square(point_cloud), axis=-1, keep_dims=True)
-  point_cloud_square_tranpose = tf.transpose(point_cloud_square, perm=[0, 2, 1])
-  return point_cloud_square + point_cloud_inner + point_cloud_square_tranpose
-
-
-def knn(adj_matrix, k=20):
-  """Get KNN based on the pairwise distance.
-  Args:
-    pairwise distance: (batch_size, num_points, num_points)
-    k: int
-
-  Returns:
-    nearest neighbors: (batch_size, num_points, k)
-  """
-  neg_adj = -adj_matrix
-  _, nn_idx = tf.nn.top_k(neg_adj, k=k)
-  return nn_idx
-
-
-def get_edge_feature(point_cloud, nn_idx, k=20):
-  """Construct edge feature for each point
-  Args:
-    point_cloud: (batch_size, num_points, 1, num_dims)
-    nn_idx: (batch_size, num_points, k)
-    k: int
-
-  Returns:
-    edge features: (batch_size, num_points, k, num_dims)
-  """
-  og_batch_size = point_cloud.get_shape().as_list()[0]
-  point_cloud = tf.squeeze(point_cloud)
-  if og_batch_size == 1:
-    point_cloud = tf.expand_dims(point_cloud, 0)
-
-  point_cloud_central = point_cloud
-
-  point_cloud_shape = point_cloud.get_shape()
-  batch_size = point_cloud_shape[0].value
-  num_points = point_cloud_shape[1].value
-  num_dims = point_cloud_shape[2].value
-
-  idx_ = tf.range(batch_size) * num_points
-  idx_ = tf.reshape(idx_, [batch_size, 1, 1]) 
-
-  point_cloud_flat = tf.reshape(point_cloud, [-1, num_dims])
-  point_cloud_neighbors = tf.gather(point_cloud_flat, nn_idx+idx_)
-  point_cloud_central = tf.expand_dims(point_cloud_central, axis=-2)
-
-  point_cloud_central = tf.tile(point_cloud_central, [1, 1, k, 1])
-
-  edge_feature = tf.concat([point_cloud_central, point_cloud_neighbors-point_cloud_central], axis=-1)
-  return edge_feature
+#--------------------------------------------------------------------------------------------------------------------#
